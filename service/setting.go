@@ -34,18 +34,18 @@ var defaultConfig = `{
 }`
 
 var defaultValueMap = map[string]string{
-	"webListen":     "",
+	"webListen":     "127.0.0.1",
 	"webDomain":     "",
 	"webPort":       "2095",
 	"secret":        common.Random(32),
 	"webCertFile":   "",
 	"webKeyFile":    "",
-	"webPath":       "/app/",
+	"webPath":       "/s-ui/",
 	"webURI":        "",
 	"sessionMaxAge": "0",
 	"trafficAge":    "30",
-	"timeLocation":  "Asia/Tehran",
-	"subListen":     "",
+	"timeLocation":  "Asia/Hong_Kong",
+	"subListen":     "127.0.0.1",
 	"subPort":       "2096",
 	"subPath":       "/sub/",
 	"subDomain":     "",
