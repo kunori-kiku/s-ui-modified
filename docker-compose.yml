@@ -1,7 +1,7 @@
 ---
 services:
   s-ui:
-    image: alireza7/s-ui
+    image: kunori-kiku/s-ui
     container_name: s-ui
     hostname: "s-ui"
     volumes:
