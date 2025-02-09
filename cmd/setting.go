@@ -7,9 +7,6 @@ import (
 	"s-ui/config"
 	"s-ui/database"
 	"s-ui/service"
-	"strings"
-
-	"github.com/shirou/gopsutil/v4/net"
 )
 
 func resetSetting() {
@@ -122,50 +119,31 @@ func getPanelURI() {
 	Domain, _ := settingService.GetWebDomain()
 	KeyFile, _ := settingService.GetKeyFile()
 	CertFile, _ := settingService.GetCertFile()
+	if Listen != "127.0.0.1" {
+		fmt.Println("Your panel is listening on ", Listen)
+		fmt.Println("It is suggested to listen on 127.0.0.1")
+		fmt.Println("It is not recommended to expose the panel to the public network ON YOUR IP ADDRESS.")
+		fmt.Println("It is VERY LIKELY your panel will be exploited AND your IP will be GFWed because of the panel.")
+	}
 	TLS := false
 	if KeyFile != "" && CertFile != "" {
 		TLS = true
 	}
-	Proto := ""
 	if TLS {
-		Proto = "https://"
-	} else {
-		Proto = "http://"
+		fmt.Println("Good! Your panel is using TLS.")
+		fmt.Println("However, it is still not recommended to expose the panel to the public network as it may be scanned and marked and GFWed.")
+		fmt.Printf("You may access the panel via: \nhttps://%s:%d%s\n", Domain, Port, BasePath)
 	}
-	PortText := fmt.Sprintf(":%d", Port)
-	if (Port == 443 && TLS) || (Port == 80 && !TLS) {
-		PortText = ""
-	}
-	if len(Domain) > 0 {
-		fmt.Println(Proto + Domain + PortText + BasePath)
-		return
-	}
-	if len(Listen) > 0 {
-		fmt.Println(Proto + Listen + PortText + BasePath)
-		return
-	}
-	fmt.Println("Local address:")
+	fmt.Println("Please follow the best practice to access the panel: https://github.com/kunori-kiku/s-ui-modified")
+	fmt.Printf("Current local address: http://localhost:%d%s\n", Port, BasePath)
+	fmt.Println("If urgent, you may use SSH port forwarding to access the panel:")
 	// get ip address
-	netInterfaces, _ := net.Interfaces()
-	for i := 0; i < len(netInterfaces); i++ {
-		if len(netInterfaces[i].Flags) > 2 && netInterfaces[i].Flags[0] == "up" && netInterfaces[i].Flags[1] != "loopback" {
-			addrs := netInterfaces[i].Addrs
-			for _, address := range addrs {
-				IP := strings.Split(address.Addr, "/")[0]
-				if strings.Contains(address.Addr, ".") {
-					fmt.Println(Proto + IP + PortText + BasePath)
-				} else if address.Addr[0:6] != "fe80::" {
-					fmt.Println(Proto + "[" + IP + "]" + PortText + BasePath)
-				}
-			}
-		}
-	}
 	resp, err := http.Get("https://api.ipify.org?format=text")
 	if err == nil {
 		defer resp.Body.Close()
 		ip, err := io.ReadAll(resp.Body)
 		if err == nil {
-			fmt.Printf("\nGlobal address:\n%s%s%s%s\n", Proto, ip, PortText, BasePath)
+			fmt.Printf("ssh -L %d:localhost:%d -p 22 %s\n(or replace `-p 22 %s` with SSH alias to your machine)\n", Port, Port, ip, ip)
 		}
 	}
 }
