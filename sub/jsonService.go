@@ -126,9 +126,10 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 		protocol, _ := outbound["type"].(string)
 		config, _ := configs[protocol].(map[string]interface{})
 		for key, value := range config {
-			if key != "alterId" && key != "name" {
-				outbound[key] = value
+			if key == "name" || key == "alterId" || (key == "flow" && inData.TlsId == 0) {
+				continue
 			}
+			outbound[key] = value
 		}
 
 		var addrs []map[string]interface{}
@@ -212,11 +213,16 @@ func (j *JsonService) addDefaultOutbounds(outbounds *[]map[string]interface{}, o
 func (j *JsonService) addOthers(jsonConfig *map[string]interface{}) error {
 	rules := []interface{}{
 		map[string]interface{}{
+			"action": "sniff",
+		},
+		map[string]interface{}{
 			"clash_mode": "Direct",
+			"action":     "route",
 			"outbound":   "direct",
 		},
 		map[string]interface{}{
 			"clash_mode": "Global",
+			"action":     "route",
 			"outbound":   "proxy",
 		},
 	}

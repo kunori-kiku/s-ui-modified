@@ -352,7 +352,7 @@ func vlessLink(
 				params["flow"] = fmt.Sprintf("%v", flowVal)
 			}
 			if utls, ok := tls["utls"].(map[string]interface{}); ok {
-				params["fingerprint"], _ = utls["fingerprint"].(string)
+				params["fp"], _ = utls["fingerprint"].(string)
 			}
 			if sni, ok := tls["server_name"].(string); ok {
 				params["sni"] = sni
@@ -400,7 +400,7 @@ func trojanLink(
 				}
 			}
 			if utls, ok := tls["utls"].(map[string]interface{}); ok {
-				params["fingerprint"], _ = utls["fingerprint"].(string)
+				params["fp"], _ = utls["fingerprint"].(string)
 			}
 			if sni, ok := tls["server_name"].(string); ok {
 				params["sni"] = sni
@@ -522,7 +522,7 @@ func getTransportParams(t interface{}) map[string]string {
 		}
 		if headers, ok := trasport["headers"].(map[string]interface{}); ok {
 			if host, ok := headers["Host"].(string); ok {
-				params["peer"] = host
+				params["host"] = host
 			}
 		}
 	case "grpc":
@@ -531,7 +531,7 @@ func getTransportParams(t interface{}) map[string]string {
 		}
 	case "httpupgrade":
 		if host, ok := trasport["host"].(string); ok {
-			params["peer"] = host
+			params["host"] = host
 		}
 		if path, ok := trasport["path"].(string); ok {
 			params["path"] = path
