@@ -30,6 +30,7 @@
 - Default listen address is set to `127.0.0.1` to prevent security concerns
 - Best practice introduced
 - Notice message when unsafe method is used
+- Added installation script with Github proxy to install `s-ui-modified` on servers that cannot access Github.
 
 ## API Documentation
 
@@ -82,8 +83,14 @@ If you do not have a `visa` or `mastercard`, there are tutorials on how to use r
 
 ## Install & Upgrade to Latest Version
 
+**Non-proxied(Recommended in most cases)**
 ```sh
 bash <(curl -Ls https://raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/install.sh)
+```
+
+**Proxied(Not recommended, only use when necessary)**
+```sh
+bash <(curl -Ls https://gh-proxy.com/raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/install.sh)
 ```
 
 ## Install legacy Version
