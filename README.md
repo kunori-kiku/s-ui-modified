@@ -90,7 +90,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/kunori-kiku/s-ui-modified/mast
 
 **Proxied(Not recommended, only use when necessary)**
 ```sh
-bash <(curl -Ls https://gh-proxy.com/raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/install.sh)
+bash <(curl -Ls https://gh-proxy.com/raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/install-proxied.sh)
 ```
 
 ## Install legacy Version
