@@ -31,7 +31,7 @@ RUN go build -ldflags="-w -s" \
 
 FROM --platform=$TARGETPLATFORM alpine
 LABEL org.opencontainers.image.authors="alireza7@gmail.com"
-ENV TZ=Asia/Tehran
+ENV TZ=Asia/Hong_Kong
 WORKDIR /app
 RUN apk add --no-cache --update ca-certificates tzdata
 COPY --from=backend-builder /app/sui /app/
