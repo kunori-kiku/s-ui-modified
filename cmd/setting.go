@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/alireza0/s-ui/config"
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/service"
 
-	"github.com/shirou/gopsutil/v4/net"
 )
 
 func resetSetting() {
