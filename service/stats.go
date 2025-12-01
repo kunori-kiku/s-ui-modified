@@ -1,9 +1,10 @@
 package service
 
 import (
-	"s-ui/database"
-	"s-ui/database/model"
 	"time"
+
+	"github.com/alireza0/s-ui/database"
+	"github.com/alireza0/s-ui/database/model"
 
 	"gorm.io/gorm"
 )
@@ -19,11 +20,11 @@ var onlineResources = &onlines{}
 type StatsService struct {
 }
 
-func (s *StatsService) SaveStats() error {
+func (s *StatsService) SaveStats(enableTraffic bool) error {
 	if !corePtr.IsRunning() {
 		return nil
 	}
-	stats := corePtr.GetInstance().ConnTracker().GetStats()
+	stats := corePtr.GetInstance().StatsTracker().GetStats()
 
 	// Reset onlines
 	onlineResources.Inbound = nil
@@ -70,8 +71,10 @@ func (s *StatsService) SaveStats() error {
 		}
 	}
 
-	err = tx.Create(&stats).Error
-	return err
+	if !enableTraffic {
+		return nil
+	}
+	return tx.Create(&stats).Error
 }
 
 func (s *StatsService) GetStats(resource string, tag string, limit int) ([]model.Stats, error) {

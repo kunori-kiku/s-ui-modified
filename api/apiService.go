@@ -2,13 +2,13 @@ package api
 
 import (
 	"encoding/json"
-	"s-ui/database"
-	"s-ui/logger"
-	"s-ui/service"
-	"s-ui/util"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/alireza0/s-ui/database"
+	"github.com/alireza0/s-ui/logger"
+	"github.com/alireza0/s-ui/service"
+	"github.com/alireza0/s-ui/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +22,7 @@ type ApiService struct {
 	service.InboundService
 	service.OutboundService
 	service.EndpointService
+	service.ServicesService
 	service.PanelService
 	service.StatsService
 	service.ServerService
@@ -81,7 +82,15 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 		if err != nil {
 			return "", err
 		}
-		subURI, err := a.SettingService.GetFinalSubURI(strings.Split(c.Request.Host, ":")[0])
+		services, err := a.ServicesService.GetAll()
+		if err != nil {
+			return "", err
+		}
+		subURI, err := a.SettingService.GetFinalSubURI(getHostname(c))
+		if err != nil {
+			return "", err
+		}
+		trafficAge, err := a.SettingService.GetTrafficAge()
 		if err != nil {
 			return "", err
 		}
@@ -91,7 +100,9 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 		data["inbounds"] = inbounds
 		data["outbounds"] = outbounds
 		data["endpoints"] = endpoints
+		data["services"] = services
 		data["subURI"] = subURI
+		data["enableTraffic"] = trafficAge > 0
 		data["onlines"] = onlines
 	} else {
 		data["onlines"] = onlines
@@ -124,6 +135,12 @@ func (a *ApiService) LoadPartialData(c *gin.Context, objs []string) error {
 				return err
 			}
 			data[obj] = endpoints
+		case "services":
+			services, err := a.ServicesService.GetAll()
+			if err != nil {
+				return err
+			}
+			data[obj] = services
 		case "tls":
 			tlsConfigs, err := a.TlsService.GetAll()
 			if err != nil {

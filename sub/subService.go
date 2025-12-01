@@ -3,11 +3,13 @@ package sub
 import (
 	"encoding/base64"
 	"fmt"
-	"s-ui/database"
-	"s-ui/database/model"
-	"s-ui/service"
 	"strings"
 	"time"
+
+	"github.com/alireza0/s-ui/database"
+	"github.com/alireza0/s-ui/database/model"
+	"github.com/alireza0/s-ui/service"
+	"github.com/alireza0/s-ui/util"
 )
 
 type SubService struct {
@@ -34,11 +36,8 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 	linksArray := s.LinkService.GetLinks(&client.Links, "all", clientInfo)
 	result := strings.Join(linksArray, "\n")
 
-	var headers []string
 	updateInterval, _ := s.SettingService.GetSubUpdates()
-	headers = append(headers, fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", client.Up, client.Down, client.Volume, client.Expiry))
-	headers = append(headers, fmt.Sprintf("%d", updateInterval))
-	headers = append(headers, subId)
+	headers := util.GetHeaders(client, updateInterval)
 
 	subEncode, _ := s.SettingService.GetSubEncode()
 	if subEncode {

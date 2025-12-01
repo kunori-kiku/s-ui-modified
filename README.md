@@ -26,6 +26,19 @@
 | Dark/Light Theme                       | :heavy_check_mark: |
 | API Interface                          | :heavy_check_mark: |
 
+## Supported Platforms
+| Platform | Architecture | Status |
+|----------|--------------|---------|
+| Linux    | amd64, arm64, armv7, armv6, armv5, 386, s390x | ✅ Supported |
+| Windows  | amd64, 386, arm64 | ✅ Supported |
+| macOS    | amd64, arm64 | 🚧 Experimental |
+
+## Screenshots
+
+!["Main"](https://github.com/alireza0/s-ui-frontend/raw/main/media/main.png)
+
+[Other UI Screenshots](https://github.com/alireza0/s-ui-frontend/blob/main/screenshots.md)
+
 ## What are modified?
 - Default listen address is set to `127.0.0.1` to prevent security concerns
 - Best practice introduced
@@ -93,6 +106,12 @@ bash <(curl -Ls https://raw.githubusercontent.com/kunori-kiku/s-ui-modified/mast
 bash <(curl -Ls https://gh-proxy.com/raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/install-proxied.sh)
 ```
 
+### Windows
+1. Download the latest Windows release from [GitHub Releases](https://github.com/alireza0/s-ui/releases/latest)
+2. Extract the ZIP file
+3. Run `install-windows.bat` as Administrator
+4. Follow the installation wizard
+
 ## Install legacy Version
 
 **Step 1:** To install your desired legacy version, add the version to the end of the installation command. e.g., ver `1.0.0`:
@@ -103,6 +122,7 @@ VERSION=1.0.0 && bash <(curl -Ls https://raw.githubusercontent.com/kunori-kiku/s
 
 ## Manual installation
 
+### Linux/macOS
 1. Get the latest version of S-UI based on your OS/Architecture from GitHub: [https://github.com/kunori-kiku/s-ui-modified/releases/latest](https://github.com/kunori-kiku/s-ui-modified/releases/latest)
 2. **OPTIONAL** Get the latest version of `s-ui.sh` [https://raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/s-ui.sh](https://raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/s-ui.sh)
 3. **OPTIONAL** Copy `s-ui.sh` to /usr/bin/ and run `chmod +x /usr/bin/s-ui`.
@@ -110,6 +130,14 @@ VERSION=1.0.0 && bash <(curl -Ls https://raw.githubusercontent.com/kunori-kiku/s
 5. Copy *.service files to /etc/systemd/system/ and run `systemctl daemon-reload`.
 6. Enable autostart and start S-UI service using `systemctl enable s-ui --now`
 7. Start sing-box service using `systemctl enable sing-box --now`
+
+### Windows
+1. Get the latest Windows version from GitHub: [https://github.com/alireza0/s-ui/releases/latest](https://github.com/alireza0/s-ui/releases/latest)
+2. Download the appropriate Windows package (e.g., `s-ui-windows-amd64.zip`)
+3. Extract the ZIP file to a directory of your choice
+4. Run `install-windows.bat` as Administrator
+5. Follow the installation wizard
+6. Access the panel at http://localhost:2095/app
 
 ## Uninstall S-UI
 
@@ -216,21 +244,6 @@ To run backend (from root folder of repository):
 - Subscription service with ability to add external links and subscription
 - HTTPS for secure access to the web panel and subscription service (self-provided domain + SSL certificate)
 - Dark/Light theme
-
-## Recommended OS
-
-- Ubuntu 20.04+
-- Debian 11+
-- CentOS 8+
-- Fedora 36+
-- Arch Linux
-- Parch Linux
-- Manjaro
-- Armbian
-- AlmaLinux 9+
-- Rocky Linux 9+
-- Oracle Linux 8+
-- OpenSUSE Tubleweed
 
 ## Environment Variables
 

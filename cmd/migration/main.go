@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"s-ui/config"
+
+	"github.com/alireza0/s-ui/config"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -56,10 +57,20 @@ func MigrateDb() {
 			log.Fatal("Migration to 1.2 failed: ", err)
 			return
 		}
+		dbVersion = "1.2"
+	}
+
+	// Before 1.3
+	if dbVersion[0:3] == "1.2" {
+		err = to1_3(tx)
+		if err != nil {
+			log.Fatal("Migration to 1.3 failed: ", err)
+			return
+		}
 	}
 
 	// Set version
-	err = tx.Raw("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
+	err = tx.Exec("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
 	if err != nil {
 		log.Fatal("Update version failed: ", err)
 		return

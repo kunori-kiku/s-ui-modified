@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 red='\033[0;31m'
@@ -6,7 +5,6 @@ green='\033[0;32m'
 yellow='\033[0;33m'
 plain='\033[0m'
 
-#Add some basic function here
 function LOGD() {
     echo -e "${yellow}[DEG] $* ${plain}"
 }
@@ -18,10 +16,9 @@ function LOGE() {
 function LOGI() {
     echo -e "${green}[INF] $* ${plain}"
 }
-# check root
+
 [[ $EUID -ne 0 ]] && LOGE "ERROR: You must be root to run this script! \n" && exit 1
 
-# Check OS and set release variable
 if [[ -f /etc/os-release ]]; then
     source /etc/os-release
     release=$ID
@@ -34,67 +31,6 @@ else
 fi
 
 echo "The OS release is: $release"
-
-
-os_version=""
-os_version=$(grep -i version_id /etc/os-release | cut -d \" -f2 | cut -d . -f1)
-
-if [[ "${release}" == "arch" ]]; then
-    echo "Your OS is Arch Linux"
-elif [[ "${release}" == "parch" ]]; then
-    echo "Your OS is Parch linux"
-elif [[ "${release}" == "manjaro" ]]; then
-    echo "Your OS is Manjaro"
-elif [[ "${release}" == "armbian" ]]; then
-    echo "Your OS is Armbian"
-elif [[ "${release}" == "opensuse-tumbleweed" ]]; then
-    echo "Your OS is OpenSUSE Tumbleweed"
-elif [[ "${release}" == "centos" ]]; then
-    if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red} Please use CentOS 8 or higher ${plain}\n" && exit 1
-    fi
-elif [[ "${release}" == "ubuntu" ]]; then
-    if [[ ${os_version} -lt 20 ]]; then
-        echo -e "${red} Please use Ubuntu 20 or higher version!${plain}\n" && exit 1
-    fi
-elif [[ "${release}" == "fedora" ]]; then
-    if [[ ${os_version} -lt 36 ]]; then
-        echo -e "${red} Please use Fedora 36 or higher version!${plain}\n" && exit 1
-    fi
-elif [[ "${release}" == "debian" ]]; then
-    if [[ ${os_version} -lt 11 ]]; then
-        echo -e "${red} Please use Debian 11 or higher ${plain}\n" && exit 1
-    fi
-elif [[ "${release}" == "almalinux" ]]; then
-    if [[ ${os_version} -lt 9 ]]; then
-        echo -e "${red} Please use AlmaLinux 9 or higher ${plain}\n" && exit 1
-    fi
-elif [[ "${release}" == "rocky" ]]; then
-    if [[ ${os_version} -lt 9 ]]; then
-        echo -e "${red} Please use Rocky Linux 9 or higher ${plain}\n" && exit 1
-    fi
-elif [[ "${release}" == "oracle" ]]; then
-    if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red} Please use Oracle Linux 8 or higher ${plain}\n" && exit 1
-    fi
-else
-    echo -e "${red}Your operating system is not supported by this script.${plain}\n"
-    echo "Please ensure you are using one of the following supported operating systems:"
-    echo "- Ubuntu 20.04+"
-    echo "- Debian 11+"
-    echo "- CentOS 8+"
-    echo "- Fedora 36+"
-    echo "- Arch Linux"
-    echo "- Parch Linux"
-    echo "- Manjaro"
-    echo "- Armbian"
-    echo "- AlmaLinux 9+"
-    echo "- Rocky Linux 9+"
-    echo "- Oracle Linux 8+"
-    echo "- OpenSUSE Tumbleweed"
-    exit 1
-
-fi
 
 confirm() {
     if [[ $# > 1 ]]; then
@@ -164,7 +100,6 @@ custom_version() {
 
     download_link="https://raw.githubusercontent.com/kunori-kiku/s-ui-modified/master/install.sh"
 
-    # Use the entered panel version in the download link
     install_command="bash <(curl -Ls $download_link) $panel_version"
 
     echo "Downloading and installing panel version $panel_version..."
@@ -232,13 +167,11 @@ set_setting() {
     echo -e "Enter the ${yellow}panel path${plain} (leave blank for existing/default value):"
     read config_path
 
-    # Sub configuration
     echo -e "Enter the ${yellow}subscription port${plain} (leave blank for existing/default value):"
     read config_subPort
     echo -e "Enter the ${yellow}subscription path${plain} (leave blank for existing/default value):" 
     read config_subPath
 
-    # Set configs
     echo -e "${yellow}Initializing, please wait...${plain}"
     params=""
     [ -z "$config_port" ] || params="$params -port $config_port"
@@ -373,7 +306,6 @@ update_shell() {
     fi
 }
 
-# 0: running, 1: not running, 2: not installed
 check_status() {
     if [[ ! -f "/etc/systemd/system/$1.service" ]]; then
         return 2
@@ -487,20 +419,13 @@ bbr_menu() {
 }
 
 disable_bbr() {
-
     if ! grep -q "net.core.default_qdisc=fq" /etc/sysctl.conf || ! grep -q "net.ipv4.tcp_congestion_control=bbr" /etc/sysctl.conf; then
         echo -e "${yellow}BBR is not currently enabled.${plain}"
         exit 0
     fi
-
-    # Replace BBR with CUBIC configurations
     sed -i 's/net.core.default_qdisc=fq/net.core.default_qdisc=pfifo_fast/' /etc/sysctl.conf
     sed -i 's/net.ipv4.tcp_congestion_control=bbr/net.ipv4.tcp_congestion_control=cubic/' /etc/sysctl.conf
-
-    # Apply changes
     sysctl -p
-
-    # Verify that BBR is replaced with CUBIC
     if [[ $(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}') == "cubic" ]]; then
         echo -e "${green}BBR has been replaced with CUBIC successfully.${plain}"
     else
@@ -513,8 +438,6 @@ enable_bbr() {
         echo -e "${green}BBR is already enabled!${plain}"
         exit 0
     fi
-
-    # Check the OS and install necessary packages
     case "${release}" in
     ubuntu | debian | armbian)
         apt-get update && apt-get install -yqq --no-install-recommends ca-certificates
@@ -533,15 +456,9 @@ enable_bbr() {
         exit 1
         ;;
     esac
-
-    # Enable BBR
     echo "net.core.default_qdisc=fq" | tee -a /etc/sysctl.conf
     echo "net.ipv4.tcp_congestion_control=bbr" | tee -a /etc/sysctl.conf
-
-    # Apply changes
     sysctl -p
-
-    # Verify that BBR is enabled
     if [[ $(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}') == "bbr" ]]; then
         echo -e "${green}BBR has been enabled successfully.${plain}"
     else
@@ -566,6 +483,7 @@ ssl_cert_issue_main() {
     echo -e "${green}\t1.${plain} Get SSL"
     echo -e "${green}\t2.${plain} Revoke"
     echo -e "${green}\t3.${plain} Force Renew"
+    echo -e "${green}\t4.${plain} Self-signed Certificate"
     read -p "Choose an option: " choice
     case "$choice" in
         1) ssl_cert_issue ;;
@@ -579,12 +497,14 @@ ssl_cert_issue_main() {
             local domain=""
             read -p "Please enter your domain name to forcefully renew an SSL certificate: " domain
             ~/.acme.sh/acme.sh --renew -d ${domain} --force ;;
+        4)
+            generate_self_signed_cert
+            ;;
         *) echo "Invalid choice" ;;
     esac
 }
 
 ssl_cert_issue() {
-    # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
         echo "acme.sh could not be found. we will install it"
         install_acme
@@ -593,7 +513,6 @@ ssl_cert_issue() {
             exit 1
         fi
     fi
-    # install socat second
     case "${release}" in
     ubuntu | debian | armbian)
         apt update && apt install socat -y
@@ -619,11 +538,9 @@ ssl_cert_issue() {
         LOGI "install socat succeed..."
     fi
 
-    # get the domain here,and we need verify it
     local domain=""
     read -p "Please enter your domain name:" domain
     LOGD "your domain is:${domain},check it..."
-    # here we need to judge whether there exists cert already
     local currentCert=$(~/.acme.sh/acme.sh --list | tail -1 | awk '{print $1}')
 
     if [ ${currentCert} == ${domain} ]; then
@@ -635,7 +552,6 @@ ssl_cert_issue() {
         LOGI "your domain is ready for issuing cert now..."
     fi
 
-    # create a directory for install cert
     certPath="/root/cert/${domain}"
     if [ ! -d "$certPath" ]; then
         mkdir -p "$certPath"
@@ -644,15 +560,12 @@ ssl_cert_issue() {
         mkdir -p "$certPath"
     fi
 
-    # get needed port here
     local WebPort=80
     read -p "please choose which port do you use,default will be 80 port:" WebPort
     if [[ ${WebPort} -gt 65535 || ${WebPort} -lt 1 ]]; then
         LOGE "your input ${WebPort} is invalid,will use default port"
     fi
     LOGI "will use port:${WebPort} to issue certs,please make sure this port is open..."
-    # NOTE:This should be handled by user
-    # open the port and kill the occupied progress
     ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
     ~/.acme.sh/acme.sh --issue -d ${domain} --standalone --httpport ${WebPort}
     if [ $? -ne 0 ]; then
@@ -662,7 +575,6 @@ ssl_cert_issue() {
     else
         LOGE "issue certs succeed,installing certs..."
     fi
-    # install cert
     ~/.acme.sh/acme.sh --installcert -d ${domain} \
         --key-file /root/cert/${domain}/privkey.pem \
         --fullchain-file /root/cert/${domain}/fullchain.pem
@@ -691,78 +603,172 @@ ssl_cert_issue() {
 ssl_cert_issue_CF() {
     echo -E ""
     LOGD "******Instructions for use******"
-    LOGI "This Acme script requires the following data:"
-    LOGI "1.Cloudflare Registered e-mail"
-    LOGI "2.Cloudflare Global API Key"
-    LOGI "3.The domain name that has been resolved dns to the current server by Cloudflare"
-    LOGI "4.The script applies for a certificate. The default installation path is /root/cert "
-    confirm "Confirmed?[y/n]" "y"
-    if [ $? -eq 0 ]; then
-        # check for acme.sh first
-        if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
-            echo "acme.sh could not be found. we will install it"
-            install_acme
-            if [ $? -ne 0 ]; then
-                LOGE "install acme failed, please check logs"
-                exit 1
+    echo "1) New certificate from Cloudflare"
+    echo "2) Force renew existing Certificates"
+    echo "3) Back to Menu"
+    read -p "Enter your choice [1-3]: " choice
+
+    certPath="/root/cert-CF"
+
+    case $choice in
+        1|2)
+            force_flag=""
+            if [ "$choice" -eq 2 ]; then
+                force_flag="--force"
+                echo "Forcing SSL certificate reissuance..."
+            else
+                echo "Starting SSL certificate issuance..."
             fi
-        fi
-        CF_Domain=""
-        CF_GlobalKey=""
-        CF_AccountEmail=""
-        certPath=/root/cert
-        if [ ! -d "$certPath" ]; then
-            mkdir $certPath
-        else
-            rm -rf $certPath
-            mkdir $certPath
-        fi
-        LOGD "Please set a domain name:"
-        read -p "Input your domain here:" CF_Domain
-        LOGD "Your domain name is set to:${CF_Domain}"
-        LOGD "Please set the API key:"
-        read -p "Input your key here:" CF_GlobalKey
-        LOGD "Your API key is:${CF_GlobalKey}"
-        LOGD "Please set up registered email:"
-        read -p "Input your email here:" CF_AccountEmail
-        LOGD "Your registered email address is:${CF_AccountEmail}"
-        ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-        if [ $? -ne 0 ]; then
-            LOGE "Default CA, Lets'Encrypt fail, script exiting..."
-            exit 1
-        fi
-        export CF_Key="${CF_GlobalKey}"
-        export CF_Email=${CF_AccountEmail}
-        ~/.acme.sh/acme.sh --issue --dns dns_cf -d ${CF_Domain} -d *.${CF_Domain} --log
-        if [ $? -ne 0 ]; then
-            LOGE "Certificate issuance failed, script exiting..."
-            exit 1
-        else
-            LOGI "Certificate issued Successfully, Installing..."
-        fi
-        ~/.acme.sh/acme.sh --installcert -d ${CF_Domain} -d *.${CF_Domain} --ca-file /root/cert/ca.cer \
-        --cert-file /root/cert/${CF_Domain}.cer --key-file /root/cert/${CF_Domain}.key \
-        --fullchain-file /root/cert/fullchain.cer
-        if [ $? -ne 0 ]; then
-            LOGE "Certificate installation failed, script exiting..."
-            exit 1
-        else
-            LOGI "Certificate installed Successfully,Turning on automatic updates..."
-        fi
-        ~/.acme.sh/acme.sh --upgrade --auto-upgrade
-        if [ $? -ne 0 ]; then
-            LOGE "Auto update setup Failed, script exiting..."
-            ls -lah cert
-            chmod 755 $certPath
-            exit 1
-        else
-            LOGI "The certificate is installed and auto-renewal is turned on, Specific information is as follows"
-            ls -lah cert
-            chmod 755 $certPath
-        fi
+            
+            LOGD "******Instructions for use******"
+            LOGI "This Acme script requires the following data:"
+            LOGI "1.Cloudflare Registered e-mail"
+            LOGI "2.Cloudflare Global API Key"
+            LOGI "3.The domain name that has been resolved DNS to the current server by Cloudflare"
+            LOGI "4.The script applies for a certificate. The default installation path is /root/cert "
+            confirm "Confirmed?[y/n]" "y"
+            if [ $? -eq 0 ]; then
+                if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+                    echo "acme.sh could not be found. Installing..."
+                    install_acme
+                    if [ $? -ne 0 ]; then
+                        LOGE "Install acme failed, please check logs"
+                        exit 1
+                    fi
+                fi
+
+                CF_Domain=""
+                if [ ! -d "$certPath" ]; then
+                    mkdir -p $certPath
+                else
+                    rm -rf $certPath
+                    mkdir -p $certPath
+                fi
+
+                LOGD "Please set a domain name:"
+                read -p "Input your domain here: " CF_Domain
+                LOGD "Your domain name is set to: ${CF_Domain}"
+
+                CF_GlobalKey=""
+                CF_AccountEmail=""
+                LOGD "Please set the API key:"
+                read -p "Input your key here: " CF_GlobalKey
+                LOGD "Your API key is: ${CF_GlobalKey}"
+
+                LOGD "Please set up registered email:"
+                read -p "Input your email here: " CF_AccountEmail
+                LOGD "Your registered email address is: ${CF_AccountEmail}"
+
+                ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+                if [ $? -ne 0 ]; then
+                    LOGE "Default CA, Let's Encrypt failed, script exiting..."
+                    exit 1
+                fi
+
+                export CF_Key="${CF_GlobalKey}"
+                export CF_Email="${CF_AccountEmail}"
+
+                ~/.acme.sh/acme.sh --issue --dns dns_cf -d ${CF_Domain} -d *.${CF_Domain} $force_flag --log
+                if [ $? -ne 0 ]; then
+                    LOGE "Certificate issuance failed, script exiting..."
+                    exit 1
+                else
+                    LOGI "Certificate issued Successfully, Installing..."
+                fi
+
+                mkdir -p ${certPath}/${CF_Domain}
+                if [ $? -ne 0 ]; then
+                    LOGE "Failed to create directory: ${certPath}/${CF_Domain}"
+                    exit 1
+                fi
+
+                ~/.acme.sh/acme.sh --installcert -d ${CF_Domain} -d *.${CF_Domain} \
+                    --fullchain-file ${certPath}/${CF_Domain}/fullchain.pem \
+                    --key-file ${certPath}/${CF_Domain}/privkey.pem
+
+                if [ $? -ne 0 ]; then
+                    LOGE "Certificate installation failed, script exiting..."
+                    exit 1
+                else
+                    LOGI "Certificate installed Successfully, Turning on automatic updates..."
+                fi
+
+                ~/.acme.sh/acme.sh --upgrade --auto-upgrade
+                if [ $? -ne 0 ]; then
+                    LOGE "Auto update setup failed, script exiting..."
+                    exit 1
+                else
+                    LOGI "The certificate is installed and auto-renewal is turned on."
+                    ls -lah ${certPath}/${CF_Domain}
+                    chmod 755 ${certPath}/${CF_Domain}
+                fi
+            fi
+            show_menu
+            ;;
+        3)
+            echo "Exiting..."
+            show_menu
+            ;;
+        *)
+            echo "Invalid choice, please select again."
+            show_menu
+            ;;
+    esac
+}
+
+generate_self_signed_cert() {
+    cert_dir="/etc/sing-box"
+    mkdir -p "$cert_dir"
+    LOGI "Choose certificate type:"
+    echo -e "${green}\t1.${plain} Ed25519 (*recommended*)"
+    echo -e "${green}\t2.${plain} RSA 2048"
+    echo -e "${green}\t3.${plain} RSA 4096"
+    echo -e "${green}\t4.${plain} ECDSA prime256v1"
+    echo -e "${green}\t5.${plain} ECDSA secp384r1"
+    read -p "Enter your choice [1-5, default 1]: " cert_type
+    cert_type=${cert_type:-1}
+
+    case "$cert_type" in
+        1)
+            algo="ed25519"
+            key_opt="-newkey ed25519"
+            ;;
+        2)
+            algo="rsa"
+            key_opt="-newkey rsa:2048"
+            ;;
+        3)
+            algo="rsa"
+            key_opt="-newkey rsa:4096"
+            ;;
+        4)
+            algo="ecdsa"
+            key_opt="-newkey ec -pkeyopt ec_paramgen_curve:prime256v1"
+            ;;
+        5)
+            algo="ecdsa"
+            key_opt="-newkey ec -pkeyopt ec_paramgen_curve:secp384r1"
+            ;;
+        *)
+            algo="ed25519"
+            key_opt="-newkey ed25519"
+            ;;
+    esac
+
+    LOGI "Generating self-signed certificate ($algo)..."
+    sudo openssl req -x509 -nodes -days 3650 $key_opt \
+        -keyout "${cert_dir}/self.key" \
+        -out "${cert_dir}/self.crt" \
+        -subj "/CN=myserver"
+    if [[ $? -eq 0 ]]; then
+        sudo chmod 600 "${cert_dir}/self."*
+        LOGI "Self-signed certificate generated successfully!"
+        LOGI "Certificate path: ${cert_dir}/self.crt"
+        LOGI "Key path: ${cert_dir}/self.key"
     else
-        show_menu
+        LOGE "Failed to generate self-signed certificate."
     fi
+    before_show_menu
 }
 
 show_usage() {

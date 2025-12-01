@@ -7,14 +7,16 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
-	"s-ui/cmd/migration"
-	"s-ui/config"
-	"s-ui/database/model"
-	"s-ui/logger"
-	"s-ui/util/common"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/alireza0/s-ui/cmd/migration"
+	"github.com/alireza0/s-ui/config"
+	"github.com/alireza0/s-ui/database/model"
+	"github.com/alireza0/s-ui/logger"
+	"github.com/alireza0/s-ui/util/common"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -287,7 +289,11 @@ func SendSighup() error {
 	// Send SIGHUP to the current process
 	go func() {
 		time.Sleep(3 * time.Second)
-		err := process.Signal(syscall.SIGHUP)
+		if runtime.GOOS == "windows" {
+			err = process.Kill()
+		} else {
+			err = process.Signal(syscall.SIGHUP)
+		}
 		if err != nil {
 			logger.Error("send signal SIGHUP failed:", err)
 		}

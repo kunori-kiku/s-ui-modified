@@ -3,10 +3,12 @@ package sub
 import (
 	"encoding/json"
 	"fmt"
-	"s-ui/database"
-	"s-ui/database/model"
-	"s-ui/service"
-	"s-ui/util"
+	"strings"
+
+	"github.com/alireza0/s-ui/database"
+	"github.com/alireza0/s-ui/database/model"
+	"github.com/alireza0/s-ui/service"
+	"github.com/alireza0/s-ui/util"
 )
 
 const defaultJson = `
@@ -46,22 +48,26 @@ type JsonService struct {
 	LinkService
 }
 
-func (j *JsonService) GetJson(subId string, format string) (*string, error) {
+func (j *JsonService) GetJson(subId string, format string) (*string, []string, error) {
 	var jsonConfig map[string]interface{}
 
 	client, inDatas, err := j.getData(subId)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	outbounds, outTags, err := j.getOutbounds(client.Config, inDatas)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	links := j.LinkService.GetLinks(&client.Links, "external", "")
+	tagNumEnable := 0
+	if len(links) > 1 {
+		tagNumEnable = 1
+	}
 	for index, link := range links {
-		json, tag, err := util.GetOutbound(link, index)
+		json, tag, err := util.GetOutbound(link, (index+1)*tagNumEnable)
 		if err == nil && len(tag) > 0 {
 			*outbounds = append(*outbounds, *json)
 			*outTags = append(*outTags, tag)
@@ -72,7 +78,7 @@ func (j *JsonService) GetJson(subId string, format string) (*string, error) {
 
 	err = json.Unmarshal([]byte(defaultJson), &jsonConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	jsonConfig["outbounds"] = outbounds
@@ -82,7 +88,11 @@ func (j *JsonService) GetJson(subId string, format string) (*string, error) {
 
 	result, _ := json.MarshalIndent(jsonConfig, "", "  ")
 	resultStr := string(result)
-	return &resultStr, nil
+
+	updateInterval, _ := j.SettingService.GetSubUpdates()
+	headers := util.GetHeaders(client, updateInterval)
+
+	return &resultStr, headers, nil
 }
 
 func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, error) {
@@ -124,12 +134,36 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 			return nil, nil, err
 		}
 		protocol, _ := outbound["type"].(string)
-		config, _ := configs[protocol].(map[string]interface{})
-		for key, value := range config {
-			if key == "name" || key == "alterId" || (key == "flow" && inData.TlsId == 0) {
-				continue
+
+		// Shadowsocks
+		if protocol == "shadowsocks" {
+			var userPass []string
+			var inbOptions map[string]interface{}
+			err = json.Unmarshal(inData.Options, &inbOptions)
+			if err != nil {
+				return nil, nil, err
 			}
-			outbound[key] = value
+			method, _ := inbOptions["method"].(string)
+			if strings.HasPrefix(method, "2022") {
+				inbPass, _ := inbOptions["password"].(string)
+				userPass = append(userPass, inbPass)
+			}
+			var pass string
+			if method == "2022-blake3-aes-128-gcm" {
+				pass, _ = configs["shadowsocks16"].(map[string]interface{})["password"].(string)
+			} else {
+				pass, _ = configs["shadowsocks"].(map[string]interface{})["password"].(string)
+			}
+			userPass = append(userPass, pass)
+			outbound["password"] = strings.Join(userPass, ":")
+		} else { // Other protocols
+			config, _ := configs[protocol].(map[string]interface{})
+			for key, value := range config {
+				if key == "name" || key == "alterId" || (key == "flow" && inData.TlsId == 0) {
+					continue
+				}
+				outbound[key] = value
+			}
 		}
 
 		var addrs []map[string]interface{}
@@ -211,7 +245,7 @@ func (j *JsonService) addDefaultOutbounds(outbounds *[]map[string]interface{}, o
 }
 
 func (j *JsonService) addOthers(jsonConfig *map[string]interface{}) error {
-	rules := []interface{}{
+	rules_start := []interface{}{
 		map[string]interface{}{
 			"action": "sniff",
 		},
@@ -220,6 +254,8 @@ func (j *JsonService) addOthers(jsonConfig *map[string]interface{}) error {
 			"action":     "route",
 			"outbound":   "direct",
 		},
+	}
+	rules_end := []interface{}{
 		map[string]interface{}{
 			"clash_mode": "Global",
 			"action":     "route",
@@ -229,7 +265,7 @@ func (j *JsonService) addOthers(jsonConfig *map[string]interface{}) error {
 	route := map[string]interface{}{
 		"auto_detect_interface": true,
 		"final":                 "proxy",
-		"rules":                 rules,
+		"rules":                 rules_start,
 	}
 
 	othersStr, err := j.SettingService.GetSubJsonExt()
@@ -261,7 +297,11 @@ func (j *JsonService) addOthers(jsonConfig *map[string]interface{}) error {
 		route["rule_set"] = othersJson["rule_set"]
 	}
 	if settingRules, ok := othersJson["rules"].([]interface{}); ok {
-		route["rules"] = append(rules, settingRules...)
+		rules := append(rules_start, settingRules...)
+		route["rules"] = append(rules, rules_end...)
+	}
+	if defaultDomainResolver, ok := othersJson["default_domain_resolver"].(string); ok {
+		route["default_domain_resolver"] = defaultDomainResolver
 	}
 	(*jsonConfig)["route"] = route
 

@@ -3,14 +3,16 @@ package service
 import (
 	"encoding/json"
 	"os"
-	"s-ui/config"
-	"s-ui/database"
-	"s-ui/database/model"
-	"s-ui/logger"
-	"s-ui/util/common"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/alireza0/s-ui/config"
+	"github.com/alireza0/s-ui/database"
+	"github.com/alireza0/s-ui/database/model"
+	"github.com/alireza0/s-ui/logger"
+	"github.com/alireza0/s-ui/util/common"
 
 	"gorm.io/gorm"
 )
@@ -19,9 +21,15 @@ var defaultConfig = `{
   "log": {
     "level": "info"
   },
-  "dns": {},
+  "dns": {
+    "servers": [],
+    "rules": []
+  },
   "route": {
     "rules": [
+		  {
+        "action": "sniff"
+      },
       {
         "protocol": [
           "dns"
@@ -56,6 +64,7 @@ var defaultValueMap = map[string]string{
 	"subShowInfo":   "false",
 	"subURI":        "",
 	"subJsonExt":    "",
+	"subClashExt":   "",
 	"config":        defaultConfig,
 	"version":       config.GetVersion(),
 }
@@ -238,6 +247,9 @@ func (s *SettingService) GetTimeLocation() (*time.Location, error) {
 	if err != nil {
 		return nil, err
 	}
+	if runtime.GOOS == "windows" {
+		l = "Local"
+	}
 	location, err := time.LoadLocation(l)
 	if err != nil {
 		defaultLocation := defaultValueMap["timeLocation"]
@@ -380,6 +392,13 @@ func (s *SettingService) Save(tx *gorm.DB, data json.RawMessage) error {
 			}
 		}
 
+		// Delete all stats if it is set to 0
+		if key == "trafficAge" && obj == "0" {
+			err = tx.Where("id > 0").Delete(model.Stats{}).Error
+			if err != nil {
+				return err
+			}
+		}
 		err = tx.Model(model.Setting{}).Where("key = ?", key).Update("value", obj).Error
 		if err != nil {
 			return err
@@ -390,6 +409,10 @@ func (s *SettingService) Save(tx *gorm.DB, data json.RawMessage) error {
 
 func (s *SettingService) GetSubJsonExt() (string, error) {
 	return s.getString("subJsonExt")
+}
+
+func (s *SettingService) GetSubClashExt() (string, error) {
+	return s.getString("subClashExt")
 }
 
 func (s *SettingService) fileExists(path string) error {

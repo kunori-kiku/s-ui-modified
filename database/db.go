@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path"
-	"s-ui/config"
-	"s-ui/database/model"
+
+	"github.com/alireza0/s-ui/config"
+	"github.com/alireza0/s-ui/database/model"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -76,6 +77,7 @@ func InitDB(dbPath string) error {
 		&model.Tls{},
 		&model.Inbound{},
 		&model.Outbound{},
+		&model.Service{},
 		&model.Endpoint{},
 		&model.User{},
 		&model.Tokens{},
