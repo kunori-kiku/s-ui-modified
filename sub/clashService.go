@@ -86,16 +86,15 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 		}
 	}
 
-	othersStr, err := s.getClashConfig()
-	if err != nil || len(othersStr) == 0 {
-		othersStr = basicClashConfig
+	basicConfig, err := s.getClashConfig()
+	if err != nil || len(basicConfig) == 0 {
+		basicConfig = basicClashConfig
 	}
 
-	result, err := s.ConvertToClashMeta(outbounds)
+	resultStr, err := s.ConvertToClashMeta(outbounds, basicConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	resultStr := othersStr + "\n" + string(result)
 
 	updateInterval, _ := s.SettingService.GetSubUpdates()
 	headers := util.GetHeaders(client, updateInterval)
@@ -112,7 +111,7 @@ func (s *ClashService) getClashConfig() (string, error) {
 	return subClashExt, nil
 }
 
-func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}) ([]byte, error) {
+func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, basicConfig string) (string, error) {
 	var proxies []interface{}
 	proxyTags := make([]string, 0)
 	for _, obMap := range *outbounds {
@@ -125,7 +124,13 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}) (
 		proxy := make(map[string]interface{})
 		proxy["name"] = obMap["tag"]
 		proxy["type"] = t
-		proxy["server"] = obMap["server"]
+
+		server, _ := obMap["server"].(string)
+		if len(server) > 0 && strings.Contains(server, ":") && !strings.Contains(server, ".") && !(strings.HasPrefix(server, "[") && strings.HasSuffix(server, "]")) {
+			server = "'[" + server + "]'"
+		}
+		proxy["server"] = server
+
 		proxy["port"] = obMap["server_port"]
 
 		switch t {
@@ -161,13 +166,9 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}) (
 		case "hysteria", "hysteria2":
 			if _, ok := obMap["up_mbps"].(float64); ok {
 				proxy["up"] = obMap["up_mbps"]
-			} else {
-				proxy["up"] = 1000
 			}
 			if _, ok := obMap["down_mbps"].(float64); ok {
 				proxy["down"] = obMap["down_mbps"]
-			} else {
-				proxy["down"] = 1000
 			}
 			if t == "hysteria" {
 				proxy["auth-str"] = obMap["auth_str"]
@@ -245,19 +246,18 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}) (
 				}
 			}
 			if sni, ok := tls["server_name"].(string); ok {
-				if t == "http" {
-					proxy["sni"] = sni
-				} else {
+				if t == "vless" || t == "vmess" {
 					proxy["servername"] = sni
+				} else {
+					proxy["sni"] = sni
 				}
 			}
 			if insecure, ok := tls["insecure"].(bool); ok && insecure {
 				proxy["skip-cert-verify"] = insecure
 			}
 			// ech outbounds
-			if ech, ok := tls["ech"].(interface{}); ok {
-				ech_data, _ := ech.(map[string]interface{})
-				ech_config, _ := ech_data["config"].([]interface{})
+			if ech, ok := tls["ech"].(map[string]interface{}); ok && ech["enabled"].(bool) {
+				ech_config, _ := ech["config"].([]interface{})
 				ech_string := ""
 				for i := 1; i < len(ech_config)-1; i++ {
 					ech_string += ech_config[i].(string)
@@ -366,10 +366,28 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}) (
 	proxyGroups[1]["proxies"] = proxyTags
 	proxyGroups[0]["proxies"] = append([]string{proxyGroups[1]["name"].(string)}, proxyTags...)
 
-	output := map[string]interface{}{
-		"proxies":      proxies,
-		"proxy-groups": proxyGroups,
+	// Merge proxies and proxy groups if exist
+	var output map[string]interface{}
+	err = yaml.Unmarshal([]byte(basicConfig), &output)
+	if err != nil {
+		logger.Error(err.Error())
 	}
 
-	return yaml.Marshal(output)
+	if p, ok := output["proxies"].([]interface{}); ok {
+		output["proxies"] = append(p, proxies...)
+	} else {
+		output["proxies"] = proxies
+	}
+
+	if pg, ok := output["proxy-groups"].([]interface{}); ok {
+		output["proxy-groups"] = append(pg, proxyGroups[0], proxyGroups[1])
+	} else {
+		output["proxy-groups"] = proxyGroups
+	}
+
+	result, err := yaml.Marshal(output)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
 }

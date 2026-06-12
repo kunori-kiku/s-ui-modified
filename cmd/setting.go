@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/alireza0/s-ui/config"
 	"github.com/alireza0/s-ui/database"
 	"github.com/alireza0/s-ui/service"
-
 )
 
 func resetSetting() {
@@ -108,6 +110,54 @@ func showSetting() {
 	}
 }
 
+func getPublicIP() string {
+	apis := []string{
+		"https://api64.ipify.org",
+		"https://ip.sb",
+		"https://icanhazip.com",
+		"https://ipinfo.io/ip",
+		"https://checkip.amazonaws.com",
+	}
+	type result struct {
+		ip  string
+		err error
+	}
+	ch := make(chan result, len(apis))
+	var wg sync.WaitGroup
+	client := &http.Client{Timeout: 3 * time.Second}
+
+	for _, api := range apis {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			resp, err := client.Get(url)
+			if err != nil {
+				ch <- result{"", err}
+				return
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				ch <- result{"", err}
+				return
+			}
+			ch <- result{string(body), nil}
+		}(api)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for res := range ch {
+		if res.err == nil && res.ip != "" {
+			return strings.TrimSpace(res.ip)
+		}
+	}
+	return ""
+}
+
 func getPanelURI() {
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
@@ -139,13 +189,8 @@ func getPanelURI() {
 	fmt.Println("Please follow the best practice to access the panel: https://github.com/kunori-kiku/s-ui-modified")
 	fmt.Printf("Current local address: http://localhost:%d%s\n", Port, BasePath)
 	fmt.Println("If urgent, you may use SSH port forwarding to access the panel:")
-	// get ip address
-	resp, err := http.Get("https://api.ipify.org?format=text")
-	if err == nil {
-		defer resp.Body.Close()
-		ip, err := io.ReadAll(resp.Body)
-		if err == nil {
-			fmt.Printf("ssh -L %d:localhost:%d -p 22 %s\n(or replace `-p 22 %s` with SSH alias to your machine)\n", Port, Port, ip, ip)
-		}
+	pubIP := getPublicIP()
+	if pubIP != "" {
+		fmt.Printf("ssh -L %d:localhost:%d -p 22 %s\n(or replace `-p 22 %s` with SSH alias to your machine)\n", Port, Port, pubIP, pubIP)
 	}
 }

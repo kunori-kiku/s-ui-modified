@@ -2,7 +2,8 @@ package util
 
 import (
 	"encoding/json"
-	"math/rand"
+
+	"github.com/alireza0/s-ui/util/common"
 
 	"github.com/alireza0/s-ui/database/model"
 )
@@ -41,6 +42,8 @@ func FillOutJson(i *model.Inbound, hostname string) error {
 
 	switch i.Type {
 	case "http", "socks", "mixed", "anytls":
+	case "naive":
+		naiveOut(&outJson, *inbound)
 	case "shadowsocks":
 		shadowsocksOut(&outJson, *inbound)
 	case "shadowtls":
@@ -108,7 +111,7 @@ func addTls(out *map[string]interface{}, tls *model.Tls) {
 		realityConfig := tlsConfig["reality"].(map[string]interface{})
 		realityConfig["enabled"] = true
 		if shortIDs, ok := reality["short_id"].([]interface{}); ok && len(shortIDs) > 0 {
-			realityConfig["short_id"] = shortIDs[rand.Intn(len(shortIDs))]
+			realityConfig["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
 		}
 		tlsConfig["reality"] = realityConfig
 	}
@@ -123,7 +126,21 @@ func addTls(out *map[string]interface{}, tls *model.Tls) {
 	(*out)["tls"] = tlsConfig
 }
 
-// Protocol-specific functions
+func naiveOut(out *map[string]interface{}, inbound map[string]interface{}) {
+	if quic_congestion_control, ok := inbound["quic_congestion_control"].(string); ok {
+		(*out)["quic"] = true
+		switch quic_congestion_control {
+		case "bbr_standard":
+			(*out)["quic_congestion_control"] = "bbr"
+		case "bbr2_variant":
+			(*out)["quic_congestion_control"] = "bbr2"
+		default:
+			(*out)["quic_congestion_control"] = quic_congestion_control
+		}
+	}
+
+}
+
 func shadowsocksOut(out *map[string]interface{}, inbound map[string]interface{}) {
 	if method, ok := inbound["method"].(string); ok {
 		(*out)["method"] = method

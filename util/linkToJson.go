@@ -31,6 +31,8 @@ func GetOutbound(uri string, i int) (*map[string]interface{}, string, error) {
 			return tuic(u, i)
 		case "ss", "shadowsocks":
 			return ss(u, i)
+		case "naive+https", "naive+quic", "http2":
+			return parseNaiveLink(u, i)
 		}
 	}
 	return nil, "", common.NewError("Unsupported link format")
@@ -200,17 +202,9 @@ func hy(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		port, _ = strconv.Atoi(portStr)
 	}
 
-	tls := map[string]interface{}{
-		"enabled":     true,
-		"server_name": query.Get("peer"),
-	}
-	alpn := query.Get("alpn")
-	insecure := query.Get("insecure")
-	if len(alpn) > 0 {
-		tls["alpn"] = strings.Split(alpn, ",")
-	}
-	if insecure == "1" || insecure == "true" {
-		tls["insecure"] = true
+	security := query.Get("security")
+	if len(security) == 0 {
+		security = "tls"
 	}
 
 	tag := u.Fragment
@@ -224,7 +218,7 @@ func hy(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"server_port": port,
 		"obfs":        query.Get("obfsParam"),
 		"auth_str":    query.Get("auth"),
-		"tls":         tls,
+		"tls":         getTls(security, &query),
 	}
 	down, _ := strconv.Atoi(query.Get("downmbps"))
 	up, _ := strconv.Atoi(query.Get("upmbps"))
@@ -253,17 +247,9 @@ func hy2(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		port, _ = strconv.Atoi(portStr)
 	}
 
-	tls := map[string]interface{}{
-		"enabled":     true,
-		"server_name": query.Get("sni"),
-	}
-	alpn := query.Get("alpn")
-	insecure := query.Get("insecure")
-	if len(alpn) > 0 {
-		tls["alpn"] = strings.Split(alpn, ",")
-	}
-	if insecure == "1" || insecure == "true" {
-		tls["insecure"] = true
+	security := query.Get("security")
+	if len(security) == 0 {
+		security = "tls"
 	}
 
 	tag := u.Fragment
@@ -276,11 +262,13 @@ func hy2(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"server":      host,
 		"server_port": port,
 		"password":    u.User.Username(),
-		"tls":         tls,
+		"tls":         getTls(security, &query),
 	}
 	down, _ := strconv.Atoi(query.Get("downmbps"))
 	up, _ := strconv.Atoi(query.Get("upmbps"))
 	obfs := query.Get("obfs")
+	mport := strings.ReplaceAll(query.Get("mport"), "-", ":")
+	fastopen := query.Get("fastopen")
 	if down > 0 {
 		hy2["down_mbps"] = down
 	}
@@ -293,6 +281,12 @@ func hy2(u *url.URL, i int) (*map[string]interface{}, string, error) {
 			"password": query.Get("obfs-password"),
 		}
 	}
+	if len(mport) > 0 {
+		hy2["server_ports"] = strings.Split(mport, ",")
+	}
+	if fastopen == "1" || fastopen == "true" {
+		hy2["fastopen"] = true
+	}
 	return &hy2, tag, nil
 }
 
@@ -304,17 +298,9 @@ func anytls(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		port, _ = strconv.Atoi(portStr)
 	}
 
-	tls := map[string]interface{}{
-		"enabled":     true,
-		"server_name": query.Get("sni"),
-	}
-	alpn := query.Get("alpn")
-	insecure := query.Get("insecure")
-	if len(alpn) > 0 {
-		tls["alpn"] = strings.Split(alpn, ",")
-	}
-	if insecure == "1" || insecure == "true" {
-		tls["insecure"] = true
+	security := query.Get("security")
+	if len(security) == 0 {
+		security = "tls"
 	}
 
 	tag := u.Fragment
@@ -327,7 +313,7 @@ func anytls(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"server":      host,
 		"server_port": port,
 		"password":    u.User.Username(),
-		"tls":         tls,
+		"tls":         getTls(security, &query),
 	}
 	return &anytls, tag, nil
 }
@@ -340,21 +326,9 @@ func tuic(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		port, _ = strconv.Atoi(portStr)
 	}
 
-	tls := map[string]interface{}{
-		"enabled":     true,
-		"server_name": query.Get("sni"),
-	}
-	alpn := query.Get("alpn")
-	insecure := query.Get("allow_insecure")
-	disable_sni := query.Get("disable_sni")
-	if len(alpn) > 0 {
-		tls["alpn"] = strings.Split(alpn, ",")
-	}
-	if insecure == "1" || insecure == "true" {
-		tls["insecure"] = true
-	}
-	if disable_sni == "1" || disable_sni == "true" {
-		tls["disable_sni"] = true
+	security := query.Get("security")
+	if len(security) == 0 {
+		security = "tls"
 	}
 
 	tag := u.Fragment
@@ -371,7 +345,7 @@ func tuic(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"password":           password,
 		"congestion_control": query.Get("congestion_control"),
 		"udp_relay_mode":     query.Get("udp_relay_mode"),
-		"tls":                tls,
+		"tls":                getTls(security, &query),
 	}
 	return &tuic, tag, nil
 }
@@ -436,6 +410,87 @@ func ss(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	return &ss, tag, nil
 }
 
+func parseNaiveLink(u *url.URL, i int) (*map[string]interface{}, string, error) {
+	var host, portStr, username, password string
+	var port int
+
+	switch u.Scheme {
+	case "http2":
+		decoded := StrOrBase64Encoded(u.Hostname())
+		if idx := strings.Index(decoded, "@"); idx != -1 {
+			userInfo := decoded[:idx]
+			hostPort := decoded[idx+1:]
+			if idx2 := strings.Index(userInfo, ":"); idx2 != -1 {
+				username = userInfo[:idx2]
+				password = userInfo[idx2+1:]
+			} else {
+				username = userInfo
+			}
+			host, portStr, _ = net.SplitHostPort(hostPort)
+			if portStr != "" {
+				port, _ = strconv.Atoi(portStr)
+			} else {
+				port = 443
+			}
+		} else {
+			return nil, "", common.NewError("Invalid naive link (http2)")
+		}
+	case "naive+https", "naive+quic":
+		host, portStr, _ = net.SplitHostPort(u.Host)
+		if portStr != "" {
+			port, _ = strconv.Atoi(portStr)
+		} else {
+			port = 443
+		}
+		if u.User != nil {
+			username = u.User.Username()
+			password, _ = u.User.Password()
+		}
+	default:
+		return nil, "", common.NewError("Unsupported naive scheme")
+	}
+
+	tag := u.Fragment
+	if i > 0 {
+		tag = fmt.Sprintf("%d.%s", i, u.Fragment)
+	}
+	if tag == "" {
+		tag = fmt.Sprintf("naive-%d", i)
+	}
+
+	naive := map[string]interface{}{
+		"type":        "naive",
+		"tag":         tag,
+		"server":      host,
+		"server_port": port,
+		"username":    username,
+		"password":    password,
+		"tls":         map[string]interface{}{"enabled": true},
+	}
+
+	query := u.Query()
+	if peer := query.Get("peer"); peer != "" {
+		if tls, ok := naive["tls"].(map[string]interface{}); ok {
+			tls["server_name"] = peer
+		}
+	}
+	if insecure := query.Get("insecure"); insecure == "1" || insecure == "true" {
+		if tls, ok := naive["tls"].(map[string]interface{}); ok {
+			tls["insecure"] = true
+		}
+	}
+	if alpn := query.Get("alpn"); alpn != "" {
+		if tls, ok := naive["tls"].(map[string]interface{}); ok {
+			tls["alpn"] = strings.Split(alpn, ",")
+		}
+	}
+	if u.Scheme == "naive+quic" {
+		naive["quic"] = true
+	}
+
+	return &naive, tag, nil
+}
+
 func getTransport(tp_type string, q *url.Values) map[string]interface{} {
 	transport := map[string]interface{}{}
 	tp_host := q.Get("host")
@@ -480,9 +535,11 @@ func getTls(security string, q *url.Values) map[string]interface{} {
 	tls := map[string]interface{}{}
 	tls_fp := q.Get("fp")
 	tls_sni := q.Get("sni")
-	tls_insecure := q.Get("allowInsecure")
+	tls_allow_insecure := q.Get("allowInsecure")
+	tls_insecure := q.Get("insecure")
 	tls_alpn := q.Get("alpn")
 	tls_ech := q.Get("ech")
+	disable_sni := q.Get("disable_sni")
 	switch security {
 	case "tls":
 		tls["enabled"] = true
@@ -500,7 +557,7 @@ func getTls(security string, q *url.Values) map[string]interface{} {
 	if len(tls_alpn) > 0 {
 		tls["alpn"] = strings.Split(tls_alpn, ",")
 	}
-	if tls_insecure == "1" || tls_insecure == "true" {
+	if tls_insecure == "1" || tls_insecure == "true" || tls_allow_insecure == "1" || tls_allow_insecure == "true" {
 		tls["insecure"] = true
 	}
 	if len(tls_fp) > 0 {
@@ -516,6 +573,9 @@ func getTls(security string, q *url.Values) map[string]interface{} {
 				tls_ech,
 			},
 		}
+	}
+	if disable_sni == "1" || disable_sni == "true" {
+		tls["disable_sni"] = true
 	}
 	return tls
 }

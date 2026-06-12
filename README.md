@@ -14,6 +14,8 @@
 
 **If you wish to support, please support the original author [alireza0](https://github.com/alireza0/s-ui)**
 
+**Want to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding conventions, testing, and the pull request process.
+
 ## Quick Overview
 | Features                               |      Enable?       |
 | -------------------------------------- | :----------------: |
@@ -22,7 +24,7 @@
 | Multi-Client/Inbound                   | :heavy_check_mark: |
 | Advanced Traffic Routing Interface     | :heavy_check_mark: |
 | Client & Traffic & System Status       | :heavy_check_mark: |
-| Subscription Service (link/json + info)| :heavy_check_mark: |
+| Subscription Link (link/json/clash + info)| :heavy_check_mark: |
 | Dark/Light Theme                       | :heavy_check_mark: |
 | API Interface                          | :heavy_check_mark: |
 

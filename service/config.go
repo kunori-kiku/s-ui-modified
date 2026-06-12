@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/alireza0/s-ui/core"
@@ -13,8 +14,12 @@ import (
 )
 
 var (
-	LastUpdate int64
-	corePtr    *core.Core
+	LastUpdate          int64
+	corePtr             *core.Core
+	startCoreMu         sync.Mutex
+	startCoreInProgress bool
+	lastStartFailTime   time.Time
+	startCooldown       = 15 * time.Second
 )
 
 type ConfigService struct {
@@ -44,7 +49,7 @@ func NewConfigService(core *core.Core) *ConfigService {
 	return &ConfigService{}
 }
 
-func (s *ConfigService) GetConfig(data string) (*SingBoxConfig, error) {
+func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	var err error
 	if len(data) == 0 {
 		data, err = s.SettingService.GetConfig()
@@ -74,23 +79,45 @@ func (s *ConfigService) GetConfig(data string) (*SingBoxConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &singboxConfig, nil
+	rawConfig, err := json.MarshalIndent(singboxConfig, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return &rawConfig, nil
 }
 
-func (s *ConfigService) StartCore(defaultConfig string) error {
+func (s *ConfigService) StartCore() error {
 	if corePtr.IsRunning() {
 		return nil
 	}
-	singboxConfig, err := s.GetConfig(defaultConfig)
+	startCoreMu.Lock()
+	if startCoreInProgress {
+		startCoreMu.Unlock()
+		return nil
+	}
+	if time.Since(lastStartFailTime) < startCooldown {
+		logger.Info("start core cooldown ", startCooldown/time.Second, " seconds")
+		startCoreMu.Unlock()
+		return nil
+	}
+	startCoreInProgress = true
+	startCoreMu.Unlock()
+	defer func() {
+		startCoreMu.Lock()
+		startCoreInProgress = false
+		startCoreMu.Unlock()
+	}()
+
+	logger.Info("starting core")
+	rawConfig, err := s.GetConfig("")
 	if err != nil {
 		return err
 	}
-	rawConfig, err := json.MarshalIndent(singboxConfig, "", "  ")
+	err = corePtr.Start(*rawConfig)
 	if err != nil {
-		return err
-	}
-	err = corePtr.Start(rawConfig)
-	if err != nil {
+		startCoreMu.Lock()
+		lastStartFailTime = time.Now()
+		startCoreMu.Unlock()
 		logger.Error("start sing-box err:", err.Error())
 		return err
 	}
@@ -103,15 +130,40 @@ func (s *ConfigService) RestartCore() error {
 	if err != nil {
 		return err
 	}
-	return s.StartCore("")
+	return s.StartCore()
 }
 
 func (s *ConfigService) restartCoreWithConfig(config json.RawMessage) error {
-	err := s.StopCore()
+	startCoreMu.Lock()
+	if startCoreInProgress {
+		startCoreMu.Unlock()
+		return nil
+	}
+	startCoreInProgress = true
+	startCoreMu.Unlock()
+	defer func() {
+		startCoreMu.Lock()
+		startCoreInProgress = false
+		startCoreMu.Unlock()
+	}()
+
+	if corePtr.IsRunning() {
+		if err := corePtr.Stop(); err != nil {
+			logger.Error("restart sing-box err (stop):", err.Error())
+			return err
+		}
+	}
+	rawConfig, err := s.GetConfig(string(config))
 	if err != nil {
+		logger.Error("restart sing-box err (get config):", err.Error())
 		return err
 	}
-	return s.StartCore(string(config))
+	if err := corePtr.Start(*rawConfig); err != nil {
+		logger.Error("restart sing-box err (start):", err.Error())
+		return err
+	}
+	logger.Info("sing-box restarted with new config")
+	return nil
 }
 
 func (s *ConfigService) StopCore() error {
@@ -121,6 +173,16 @@ func (s *ConfigService) StopCore() error {
 	}
 	logger.Info("sing-box stopped")
 	return nil
+}
+
+func (s *ConfigService) CheckOutbound(tag string, link string) core.CheckOutboundResult {
+	if tag == "" {
+		return core.CheckOutboundResult{Error: "missing query parameter: tag"}
+	}
+	if corePtr == nil || !corePtr.IsRunning() {
+		return core.CheckOutboundResult{Error: "core not running"}
+	}
+	return core.CheckOutbound(corePtr.GetCtx(), tag, link)
 }
 
 func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) ([]string, error) {
@@ -134,7 +196,7 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 			tx.Commit()
 			// Try to start core if it is not running
 			if !corePtr.IsRunning() {
-				s.StartCore("")
+				s.StartCore()
 			}
 		} else {
 			tx.Rollback()
@@ -169,7 +231,9 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 		if err != nil {
 			return nil, err
 		}
-		err = s.restartCoreWithConfig(data)
+		configData := make(json.RawMessage, len(data))
+		copy(configData, data)
+		go func() { _ = s.restartCoreWithConfig(configData) }()
 	case "settings":
 		err = s.SettingService.Save(tx, data)
 	default:

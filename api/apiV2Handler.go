@@ -49,6 +49,8 @@ func (a *APIv2Handler) postHandler(c *gin.Context) {
 		a.ApiService.RestartSb(c)
 	case "linkConvert":
 		a.ApiService.LinkConvert(c)
+	case "subConvert":
+		a.ApiService.SubConvert(c)
 	case "importdb":
 		a.ApiService.ImportDb(c)
 	default:
@@ -86,6 +88,8 @@ func (a *APIv2Handler) getHandler(c *gin.Context) {
 		a.ApiService.GetKeypairs(c)
 	case "getdb":
 		a.ApiService.GetDb(c)
+	case "checkOutbound":
+		a.ApiService.GetCheckOutbound(c)
 	default:
 		jsonMsg(c, "failed", common.NewError("unknown action: ", action))
 	}

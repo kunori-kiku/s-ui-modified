@@ -12,7 +12,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	_ "github.com/sagernet/sing-box/transport/v2rayquic"
-	_ "github.com/sagernet/sing-dns/quic"
 	"github.com/sagernet/sing/service"
 )
 
@@ -23,8 +22,6 @@ var (
 	service_manager  adapter.ServiceManager
 	endpoint_manager adapter.EndpointManager
 	router           adapter.Router
-	statsTracker     *StatsTracker
-	connTracker      *ConnTracker
 	factory          log.Factory
 )
 
@@ -67,6 +64,8 @@ func (c *Core) Start(sbConfig []byte) error {
 
 	err = c.instance.Start()
 	if err != nil {
+		_ = c.instance.Close()
+		c.instance = nil
 		return err
 	}
 
@@ -82,11 +81,13 @@ func (c *Core) Start(sbConfig []byte) error {
 }
 
 func (c *Core) Stop() error {
-	if c.isRunning {
-		c.isRunning = false
-		return c.instance.Close()
+	c.isRunning = false
+	if c.instance == nil {
+		return nil
 	}
-	return nil
+	err := c.instance.Close()
+	c.instance = nil
+	return err
 }
 
 func (c *Core) IsRunning() bool {

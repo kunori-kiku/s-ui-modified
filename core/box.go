@@ -2,9 +2,9 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/alireza0/s-ui/util/common"
@@ -22,7 +22,6 @@ import (
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/experimental"
 	"github.com/sagernet/sing-box/experimental/cachefile"
-	"github.com/sagernet/sing-box/experimental/libbox/platform"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/direct"
@@ -139,7 +138,7 @@ func NewBox(options Options) (*Box, error) {
 	if experimentalOptions.V2RayAPI != nil && experimentalOptions.V2RayAPI.Listen != "" {
 		needV2RayAPI = true
 	}
-	platformInterface := service.FromContext[platform.Interface](ctx)
+	platformInterface := service.FromContext[adapter.PlatformInterface](ctx)
 	var defaultLogWriter io.Writer
 	if platformInterface != nil {
 		defaultLogWriter = io.Discard
@@ -187,7 +186,7 @@ func NewBox(options Options) (*Box, error) {
 	dnsRouter := dns.NewRouter(ctx, logFactory, dnsOptions)
 	service.MustRegister[adapter.DNSRouter](ctx, dnsRouter)
 
-	networkManager, err := route.NewNetworkManager(ctx, logFactory.NewLogger("network"), routeOptions)
+	networkManager, err := route.NewNetworkManager(ctx, logFactory.NewLogger("network"), routeOptions, dnsOptions)
 	if err != nil {
 		return nil, common.NewError("initialize network manager", err)
 	}
@@ -313,26 +312,23 @@ func NewBox(options Options) (*Box, error) {
 			option.DirectOutboundOptions{},
 		)
 	})
-	dnsTransportManager.Initialize(sbCommon.Must1(
-		local.NewTransport(
+	dnsTransportManager.Initialize(func() (adapter.DNSTransport, error) {
+		return local.NewTransport(
 			ctx,
 			logFactory.NewLogger("dns/local"),
 			"local",
 			option.LocalDNSServerOptions{},
-		)))
+		)
+	})
 	if platformInterface != nil {
 		err = platformInterface.Initialize(networkManager)
 		if err != nil {
 			return nil, common.NewError("initialize platform interface", err)
 		}
 	}
-	if statsTracker == nil {
-		statsTracker = NewStatsTracker()
-	}
+	statsTracker := NewStatsTracker()
+	connTracker := NewConnTracker()
 	router.AppendTracker(statsTracker)
-	if connTracker == nil {
-		connTracker = NewConnTracker()
-	}
 	router.AppendTracker(connTracker)
 
 	if needCacheFile {
@@ -420,15 +416,6 @@ func (s *Box) PreStart() error {
 func (s *Box) Start() error {
 	err := s.start()
 	if err != nil {
-		// TODO: remove catch error
-		defer func() {
-			v := recover()
-			if v != nil {
-				s.logger.Debug(err.Error())
-				s.logger.Error("panic on early start: " + fmt.Sprint(v))
-			}
-		}()
-		s.Close()
 		return err
 	}
 	s.logger.Info("sing-box started (", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
@@ -443,15 +430,15 @@ func (s *Box) preStart() error {
 	if err != nil {
 		return common.NewError(err, "start logger")
 	}
-	err = adapter.StartNamed(adapter.StartStateInitialize, s.internalService) // cache-file clash-api v2ray-api
+	err = adapter.StartNamed(s.logger, adapter.StartStateInitialize, s.internalService) // cache-file clash-api v2ray-api
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(adapter.StartStateInitialize, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.service)
+	err = adapter.Start(s.logger, adapter.StartStateInitialize, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(adapter.StartStateStart, s.outbound, s.dnsTransport, s.dnsRouter, s.network, s.connection, s.router)
+	err = adapter.Start(s.logger, adapter.StartStateStart, s.outbound, s.dnsTransport, s.dnsRouter, s.network, s.connection, s.router)
 	if err != nil {
 		return err
 	}
@@ -463,27 +450,27 @@ func (s *Box) start() error {
 	if err != nil {
 		return err
 	}
-	err = adapter.StartNamed(adapter.StartStateStart, s.internalService)
+	err = adapter.StartNamed(s.logger, adapter.StartStateStart, s.internalService)
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(adapter.StartStateStart, s.inbound, s.endpoint, s.service)
+	err = adapter.Start(s.logger, adapter.StartStateStart, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(adapter.StartStatePostStart, s.outbound, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.inbound, s.endpoint, s.service)
+	err = adapter.Start(s.logger, adapter.StartStatePostStart, s.outbound, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
-	err = adapter.StartNamed(adapter.StartStatePostStart, s.internalService)
+	err = adapter.StartNamed(s.logger, adapter.StartStatePostStart, s.internalService)
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(adapter.StartStateStarted, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.service)
+	err = adapter.Start(s.logger, adapter.StartStateStarted, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
-	err = adapter.StartNamed(adapter.StartStateStarted, s.internalService)
+	err = adapter.StartNamed(s.logger, adapter.StartStateStarted, s.internalService)
 	if err != nil {
 		return err
 	}
@@ -493,28 +480,87 @@ func (s *Box) start() error {
 func (s *Box) Close() error {
 	select {
 	case <-s.done:
-		return os.ErrClosed
+		return nil
 	default:
 		close(s.done)
 	}
-	err := sbCommon.Close(
-		s.service, s.endpoint, s.inbound, s.outbound, s.router, s.connection, s.dnsRouter, s.dnsTransport, s.network,
-	)
-	for _, lifecycleService := range s.internalService {
-		err1 := lifecycleService.Close()
-		if err1 != nil {
-			s.logger.Debug(lifecycleService.Name(), " close error: ", err1)
+	var err error
+	s.logger.Info("closing sing-box")
+	for _, closeItem := range []struct {
+		name    string
+		service adapter.Lifecycle
+	}{
+		{"service", s.service},
+		{"endpoint", s.endpoint},
+		{"inbound", s.inbound},
+		{"outbound", s.outbound},
+		{"router", s.router},
+		{"connection", s.connection},
+		{"dns-router", s.dnsRouter},
+		{"dns-transport", s.dnsTransport},
+		{"network", s.network},
+	} {
+		if closeItem.service == nil {
+			continue
 		}
+		func() {
+			defer func() {
+				if v := recover(); v != nil {
+					err = errors.Join(err, common.NewError(fmt.Errorf("panic: %v", v), "close "+closeItem.name))
+					s.logger.Error("panic closing ", closeItem.name, ": ", v)
+				}
+			}()
+			s.logger.Trace("close ", closeItem.name)
+			startTime := time.Now()
+			closeErr := closeItem.service.Close()
+			if closeErr != nil {
+				closeErr = common.NewError(closeErr, "close "+closeItem.name)
+			}
+			err = errors.Join(err, closeErr)
+			s.logger.Trace("close ", closeItem.name, " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		}()
 	}
-	err1 := s.logFactory.Close()
-	if err1 != nil {
-		s.logger.Debug("logger close error: ", err1)
+	for _, lifecycleService := range s.internalService {
+		if lifecycleService == nil {
+			continue
+		}
+		func() {
+			defer func() {
+				if v := recover(); v != nil {
+					err = errors.Join(err, common.NewError(fmt.Errorf("panic: %v", v), "close "+lifecycleService.Name()))
+					s.logger.Error("panic closing ", lifecycleService.Name(), ": ", v)
+				}
+			}()
+			s.logger.Trace("close ", lifecycleService.Name())
+			startTime := time.Now()
+			closeErr := lifecycleService.Close()
+			if closeErr != nil {
+				closeErr = common.NewError(closeErr, "close "+lifecycleService.Name())
+			}
+			err = errors.Join(err, closeErr)
+			s.logger.Trace("close ", lifecycleService.Name(), " completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+		}()
+	}
+	s.logger.Trace("close logger")
+	startTime := time.Now()
+	closeErr := s.logFactory.Close()
+	if closeErr != nil {
+		closeErr = common.NewError(closeErr, "close logger")
+	}
+	err = errors.Join(err, closeErr)
+	s.logger.Trace("close logger completed (", F.Seconds(time.Since(startTime).Seconds()), "s)")
+	s.logger.Info("sing-box closed (live time: ", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
+	if s.statsTracker != nil {
+		s.statsTracker.Reset()
+	}
+	if s.connTracker != nil {
+		s.connTracker.Reset()
 	}
 	return err
 }
 
 func (s *Box) Uptime() uint32 {
-	return uint32(time.Now().Sub(s.createdAt).Seconds())
+	return uint32(time.Since(s.createdAt).Seconds())
 }
 
 func (s *Box) Network() adapter.NetworkManager {
