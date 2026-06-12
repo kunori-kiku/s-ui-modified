@@ -17,6 +17,12 @@ on:
       - 'go.sum'
       - 'windows/**'
 
+# A published release fires both the tag-push and release triggers; serialize
+# the twin runs so they don't race uploading the same assets (already_exists).
+concurrency:
+  group: windows-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: "25"
   TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0,with_tailscale"
